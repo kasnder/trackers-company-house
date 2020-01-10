@@ -1,18 +1,18 @@
 library(httr)
 library(jsonlite)
 
+httr::set_config(httr::config(http_version = 0)) # suppress errors
+
 source("config.R")
 
 # Retrieve information about UK-listed companies
 load_officers <- function(company_id) {
   base <- "https://api.companieshouse.gov.uk/"
-
   url <- paste(base, "company", "/", company_id, "/", "officers", sep = "")
   req <- GET(url, authenticate(secret_key, "", type = "basic"))
   json <- content(req, "text", encoding = "utf8")
   data <- jsonlite::fromJSON(json, flatten = TRUE)
-  df <- as.data.frame(data)
-  sapply(strsplit(df[["items.links.officer.appointments"]], "/"), "[[", 3)
+  as.data.frame(data)
 }
 
 # Collect CompanyHouse IDs of all considered companies
@@ -34,15 +34,18 @@ for (company_id in company_ids) {
 
 # Check all pairs of companies for connection
 company_pairs <- t(combn(seq_len(nrow(companies)), 2)) # pick two
-for (i in seq_len(nrow(company_pairs))) {
-  i <- company_pairs[i, 1]
-  j <- company_pairs[i, 2]
+for (k in seq_len(nrow(company_pairs))) {
+  i <- company_pairs[k, 1]
+  j <- company_pairs[k, 2]
 
-  shared_officers <- Reduce(intersect,  list(v1 = officers[i], v2 = officers[j]))
-  if (length(shared_officers) > 0) {
+  shared_officers <- merge(officers[[i]], officers[[j]], by.x="items.links.officer.appointments", by.y="items.links.officer.appointments")
+  if (nrow(shared_officers) > 0) {
     company1 <- companies[i, ]
     company2 <- companies[j, ]
 
-    print(paste("Shared officers:", company1$owner_name, company2$owner_name))
+    for (l in seq_len(nrow(shared_officers))) {
+      shared_officer <- shared_officers[l, ]
+        print(paste(company1$owner_name, "and", company2$owner_name, "share(d)", shared_officer[["items.officer_role.x"]], shared_officer[["items.name.x"]]))
+    }
   }
 }
